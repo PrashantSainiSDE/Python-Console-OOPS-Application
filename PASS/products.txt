@@ -1,0 +1,7 @@
+P1, vitaminC, 12.0
+P2, vitaminE, 14.5
+P3, vitaminD, 15.2
+P4, coldTablet, 6.4
+P5, vaccine, 32.6
+P6, fragrance, 25.0
+P7, covidTablet, 20.5
