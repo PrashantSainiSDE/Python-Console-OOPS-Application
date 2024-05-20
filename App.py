@@ -131,7 +131,7 @@ class Product:
 
 class Bundle(Product):
     def __init__(self, ID, name, products):
-        """Initializes a bundle with an ID, name, and a list of component products."""
+        """Initializes a bundle with an ID, name, and a list of component products and call super class."""
         self.ID = ID
         self.name = name
         self.products = products
@@ -237,7 +237,7 @@ class Records:
             customer.display_info()
     
     def list_products(self):
-        """Lists all existing products."""
+        """Lists all existing products and Bundles."""
         print("\nExisting Products:")
         print("Product ID\t Product Name\t Price\t Dr Prescription\t Bundle".expandtabs(7))
         for product in self.products:
@@ -268,16 +268,20 @@ class Operations:
         print("0: Exit the program")   
         print("#" * 60)
 
-    def validate_customer_name(self, name):
-        """Validates that the customer name contains only alphabetic characters."""
-        if not name.isalpha():
-            raise InvalidNameError("The name is not valid. Please enter a valid name.")
+    def validate_customer(self, customer):
+        """Validates that the customer name contains only alphabetic characters or ID exists."""
+        customer_details = self.records.find_customer(customer)
+        if not customer_details:
+            if not customer.isalpha():
+                raise InvalidNameError("The customer is not valid. Please enter a valid name or ID.")
+    
+        return customer_details
 
     def validate_product(self, product_name):
         """Validates that the product exists."""
         product = self.records.find_product(product_name)
         if not product:
-            raise InvalidProductError("The product is not valid. Please enter a valid product.")
+            raise InvalidProductError("The product is not valid. Please enter a valid product name or ID.")
         return product
     
     def validate_quantity(self, quantity):
@@ -291,20 +295,21 @@ class Operations:
         """Validates that the prescription input is either 'y' or 'n'."""
         if prescription not in ('y', 'n'):
             raise InvalidPrescriptionError("The answer is not valid. Please enter a valid answer.")
-
+    
     def make_purchase(self):
         """Guides the user through the purchase process and prints a receipt."""
+
         while True:
             try:
-                customer_name = input("Enter the name of the customer [e.g. Huong]:\n")
-                self.validate_customer_name(customer_name)
+                customer_name = input("Enter the name of the customer or ID:\n")
+                customer = self.validate_customer(customer_name)
                 break
             except InvalidNameError as e:
                 print(e)
                 
         while True:
             try:
-                product_name = input("Enter the product [enter a valid product only, e.g. vitaminC, coldTablet]:\n")
+                product_name = input("Enter the product name or ID:\n")
                 product_details = self.validate_product(product_name)
                 break
             except InvalidProductError as e:
@@ -331,17 +336,15 @@ class Operations:
                 except InvalidPrescriptionError as e:
                     print(e)
 
-        customer = self.records.find_customer(customer_name)
-
         if not customer:
             # Create a new basic customer if not found
             customer = BasicCustomer(f"B{self.records.highest_id_number() + 1}", customer_name)
             self.records.customers.append(customer)
         else:
             if isinstance(customer, VIPCustomer):
-                print(f"\nWelcome Our VIP Customer {customer_name}")
+                print(f"\nWelcome Our VIP Customer {customer.get_name()}")
             else:
-                print(f"\nWelcome Our Basic Customer {customer_name}")
+                print(f"\nWelcome Our Basic Customer {customer.get_name()}")
 
         # Create an order object
         order = Order(customer, product_details, quantity)
@@ -354,8 +357,8 @@ class Operations:
         print("Receipt".center(40))
         print("-" * 40)
 
-        print(f"Name:\t {customer_name}".expandtabs(20))
-        print(f"Product:\t {product_name}".expandtabs(20))
+        print(f"Name:\t {customer.get_name()}".expandtabs(20))
+        print(f"Product:\t {product_details.get_name()}".expandtabs(20))
         print(f"Unit Price:\t {original_cost/quantity:.2f} (AUD)".expandtabs(20))
         print(f"Quantity:\t {quantity}".expandtabs(20))
         print("-" * 40)
