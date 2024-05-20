@@ -1,5 +1,18 @@
 import sys
 
+# Custom exceptions for error handling
+class InvalidNameError(Exception):
+    pass
+
+class InvalidProductError(Exception):
+    pass
+
+class InvalidQuantityError(Exception):
+    pass
+
+class InvalidPrescriptionError(Exception):
+    pass
+
 # Customer class
 class Customer:
     def __init__(self, ID, name, reward):
@@ -89,11 +102,12 @@ class VIPCustomer(Customer):
         
 # Product class
 class Product:
-    def __init__(self, ID, name, price):
+    def __init__(self, ID, name, price, prescription):
         """Initializes a new product with an ID, name, and price."""
         self.ID = ID
         self.name = name
         self.price = price
+        self.prescription = prescription
     
     def get_id(self):
         """Returns the product's ID."""
@@ -106,10 +120,30 @@ class Product:
     def get_price(self):
         """Returns the product's price."""
         return self.price
+    
+    def requires_prescription(self):
+        """Returns whether the product requires a prescription."""
+        return self.prescription
 
     def display_info(self):
         """Displays the product's information."""
-        print(f"{self.ID}\t {self.name}\t {self.price:.2f}".expandtabs(15))
+        print(f"{self.ID}\t {self.name}\t {self.price:.2f}\t {'YES' if self.prescription == 'y' else 'NO'}\t --".expandtabs(14))
+
+class Bundle(Product):
+    def __init__(self, ID, name, products):
+        """Initializes a bundle with an ID, name, and a list of component products."""
+        self.ID = ID
+        self.name = name
+        self.products = products
+        self.price = 0.8 * sum(product.get_price() for product in products)
+        self.prescription = any(product.requires_prescription() == 'y' for product in products)
+        super().__init__(ID, name, self.price, 'y' if self.prescription else 'n' )
+
+    def display_info(self):
+        """Displays the bundle's information."""
+        component_ids = ', '.join(product.get_id() for product in self.products)
+        presc_str = 'YES' if self.prescription == 'y' else 'NO'
+        print(f"{self.ID}\t {self.name}\t {self.price:.2f}\t {presc_str}\t {component_ids}".expandtabs(14))
 
 # Order Class
 class Order:
@@ -161,14 +195,22 @@ class Records:
             sys.exit()
     
     def read_products(self, filename):
-        """Reads product data from a file and stores them in the product list."""
+        """Reads product and bundle data from a file and stores them in the product list."""
         try:
             with open(filename, 'r') as file:
                 for line in file:
                     data = line.strip().split(', ')
-                    product_id, name, price = data
-                    product = Product(product_id, name, float(price))
-                    self.products.append(product)
+                    if data[0].startswith('B'):
+                        bundle_id = data[0]
+                        bundle_name = data[1]
+                        component_ids = data[2:]
+                        components = [self.find_product(pid) for pid in component_ids]
+                        bundle = Bundle(bundle_id, bundle_name, components)
+                        self.products.append(bundle)
+                    else:
+                        product_id, name, price, prescription = data
+                        product = Product(product_id, name, float(price), prescription)
+                        self.products.append(product)
         except FileNotFoundError:
             print("Error: Product file not found!")
             sys.exit()
@@ -197,9 +239,10 @@ class Records:
     def list_products(self):
         """Lists all existing products."""
         print("\nExisting Products:")
-        print("Product ID\t Product Name\t Price".expandtabs(15))
+        print("Product ID\t Product Name\t Price\t Dr Prescription\t Bundle".expandtabs(7))
         for product in self.products:
             product.display_info()
+            # print(product.requires_prescription())
     
     def highest_id_number(self):
         """Returns the highest customer ID number."""
@@ -212,8 +255,8 @@ class Operations:
     def __init__(self):
         """Initializes the Operations class and reads customer and product data from files."""
         self.records = Records()
-        self.records.read_customers("PASS/customers.txt")
-        self.records.read_products("PASS/products.txt")
+        self.records.read_customers("CREDIT_DI/customers.txt")
+        self.records.read_products("CREDIT_DI/products.txt")
 
     def display_menu(self):
         """Displays the program menu with available options."""
@@ -225,16 +268,71 @@ class Operations:
         print("0: Exit the program")   
         print("#" * 60)
 
+    def validate_customer_name(self, name):
+        """Validates that the customer name contains only alphabetic characters."""
+        if not name.isalpha():
+            raise InvalidNameError("The name is not valid. Please enter a valid name.")
+
+    def validate_product(self, product_name):
+        """Validates that the product exists."""
+        product = self.records.find_product(product_name)
+        if not product:
+            raise InvalidProductError("The product is not valid. Please enter a valid product.")
+        return product
+    
+    def validate_quantity(self, quantity):
+        """Validates that the quantity is a positive integer."""
+        if quantity.isalpha() or int(quantity) <= 0:
+            raise InvalidQuantityError("The quantity is not valid. Please enter a valid quantity.")
+        else:
+            return int(quantity)
+        
+    def validate_prescription(self, prescription):
+        """Validates that the prescription input is either 'y' or 'n'."""
+        if prescription not in ('y', 'n'):
+            raise InvalidPrescriptionError("The answer is not valid. Please enter a valid answer.")
+
     def make_purchase(self):
         """Guides the user through the purchase process and prints a receipt."""
-        # Get input from the user
-        customer_name = input("Enter the name of the customer [e.g. Huong]:\n")
-        product_name = input("Enter the product [enter a valid product only, e.g. vitaminC, coldTablet]:\n")
-        quantity = int(input("Enter the quantity [enter a positive integer only, e.g. 1, 2, 3, 4]:\n"))
+        while True:
+            try:
+                customer_name = input("Enter the name of the customer [e.g. Huong]:\n")
+                self.validate_customer_name(customer_name)
+                break
+            except InvalidNameError as e:
+                print(e)
+                
+        while True:
+            try:
+                product_name = input("Enter the product [enter a valid product only, e.g. vitaminC, coldTablet]:\n")
+                product_details = self.validate_product(product_name)
+                break
+            except InvalidProductError as e:
+                print(e)
         
+        while True:
+            try:
+                quantity = input("Enter the quantity [enter a positive integer only, e.g. 1, 2, 3, 4]:\n")
+                quantity = self.validate_quantity(quantity)
+                break
+            except InvalidQuantityError as e:
+                print(e)
+
+
+        if product_details.requires_prescription() == 'y':
+            while True:
+                try:
+                    prescription_answer = input("This product requires a doctor'prescription, do you have one?\n").lower()
+                    self.validate_prescription(prescription_answer)
+                    if prescription_answer == "n":
+                        print("Sorry. This product cannot be purchased without a doctor's prescription.")
+                        return
+                    break
+                except InvalidPrescriptionError as e:
+                    print(e)
+
         customer = self.records.find_customer(customer_name)
-        product_details:Product = self.records.find_product(product_name)
-        
+
         if not customer:
             # Create a new basic customer if not found
             customer = BasicCustomer(f"B{self.records.highest_id_number() + 1}", customer_name)
