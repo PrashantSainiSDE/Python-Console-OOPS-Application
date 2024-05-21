@@ -13,6 +13,12 @@ class InvalidQuantityError(Exception):
 class InvalidPrescriptionError(Exception):
     pass
 
+class InvalidPriceError(Exception):
+    pass
+
+class InvalidRateError(Exception):
+    pass
+
 # Customer class
 class Customer:
     def __init__(self, ID, name, reward):
@@ -124,6 +130,12 @@ class Product:
     def requires_prescription(self):
         """Returns whether the product requires a prescription."""
         return self.prescription
+    
+    def update_price(self, price):
+        self.price = price
+    
+    def update_prescription(self, prescription):
+        self.prescription = prescription
 
     def display_info(self):
         """Displays the product's information."""
@@ -260,6 +272,17 @@ class Records:
         last_customer_id = last_customer.get_id()
         return int(last_customer_id[1:])
 
+    def add_or_update_product(self, name, price, prescription):
+        """Adds a new product or updates an existing product's price and prescription requirement."""
+        product:Product = self.find_product(name)
+        if product:
+            product.update_price(price)
+            product.update_prescription(prescription)
+        else:
+            new_id = f"P{len(self.products) + 1}"
+            new_product = Product(new_id, name, price, prescription)
+            self.products.append(new_product) 
+
 # Operations class
 class Operations:
     def __init__(self):
@@ -275,6 +298,9 @@ class Operations:
         print("1: Make a purchase")
         print("2: Display existing customers")
         print("3: Display existing products")
+        print("4: Add/update information of a product")
+        print("5: Adjust the reward rate of all Basic customers")
+        print("6: Adjust the discount rate of a VIP customer")
         print("0: Exit the program")   
         print("#" * 60)
 
@@ -300,12 +326,26 @@ class Operations:
             raise InvalidQuantityError("The quantity is not valid. Please enter a valid quantity.")
         else:
             return int(quantity)
-        
+
+    def validate_price(self, price):
+        """Validates that the price is a positive number."""
+        if price.isalpha() or float(price) <= 0:
+            raise InvalidPriceError("The Price must be a positive number.")
+        else:
+            return float(price)
+
     def validate_prescription(self, prescription):
         """Validates that the prescription input is either 'y' or 'n'."""
         if prescription not in ('y', 'n'):
             raise InvalidPrescriptionError("The answer is not valid. Please enter a valid answer.")
     
+    def validate_positive_number(self, value):
+        """Validates that the input is a positive number."""
+        if value.isalpha() or float(value) <= 0:
+            raise InvalidRateError("The reward rate must be a positive number greater than 0.")
+        else:
+            return float(value)
+
     def make_purchase(self):
         """Guides the user through the purchase process and prints a receipt."""
 
@@ -407,6 +447,56 @@ class Operations:
         """Prints a formatted list of all products with their details."""
         self.records.list_products()
     
+    def add_update_products(self):
+        """Handles the addition and updating of multiple products."""
+        while True:
+            try:
+                product_details = input("Enter the product details (format: product price prescription), separated by commas:\n").split(",")
+                product_details = [detail.strip() for detail in product_details]
+                for detail in product_details:
+                    name, price, prescription = detail.split()
+                    price = self.validate_price(price)
+                    self.validate_prescription(prescription)
+                break
+            except (InvalidPriceError, InvalidPrescriptionError) as e:
+                print(e)
+                print("Please re-enter the product details correctly.")
+        
+        for detail in product_details:
+                    name, price, prescription = detail.split()
+                    self.records.add_or_update_product(name, float(price), prescription)
+
+    def adjust_basic_customer_reward_rate(self):
+        """Adjusts the reward rate for all Basic customers."""
+        while True:
+            try:
+                new_rate = input("\nEnter the new reward rate for all Basic customers:\n")
+                new_rate = self.validate_positive_number(new_rate)
+                BasicCustomer.set_reward_rate(new_rate)
+                print(f"\nReward rate for all Basic customers has been updated to {new_rate * 100:.0f}%.")
+                break
+            except InvalidRateError as e:
+                print(e)   
+
+    def adjust_vip_customer_discount_rate(self):
+        """Adjusts the discount rate for a VIP customer."""
+        while True:
+                customer_identifier = input("\nEnter the name or ID of the VIP customer:\n")
+                vip_customer = self.records.find_customer(customer_identifier)
+                if not isinstance(vip_customer, VIPCustomer):
+                    print("Invalid customer. Please enter a valid VIP customer name or ID.")
+                    continue
+                break
+          
+        while True:
+            try:
+                new_rate = input("\nEnter the new discount rate for the VIP customer:\n")
+                new_rate = self.validate_positive_number(new_rate)
+                break
+            except InvalidRateError as e:
+                print(e)
+        vip_customer.set_discount_rate(new_rate)
+
     def run(self):
         """The main loop of the program, handling user input and menu options."""
        
@@ -423,6 +513,12 @@ class Operations:
                 self.display_customers()
             elif choice == '3':
                 self.display_products()
+            elif choice == '4':
+                self.add_update_products()
+            elif choice == '5':
+                self.adjust_basic_customer_reward_rate()
+            elif choice == '6':
+                self.adjust_vip_customer_discount_rate()
             elif choice == '0':
                 print("Exiting program...") # Exit message
                 break
