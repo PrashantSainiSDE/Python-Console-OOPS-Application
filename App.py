@@ -147,15 +147,15 @@ class Bundle(Product):
 
 # Order Class
 class Order:
-    def __init__(self, customer, product:Product, quantity):
+    def __init__(self, customer, products, quantities):
         """Initializes a new order with a customer, product, and quantity."""
         self.customer = customer
-        self.product = product
-        self.quantity = quantity
+        self.products = products
+        self.quantities = quantities
     
     def compute_cost(self):
         """Computes and returns the original cost, discount, final cost, and reward points for the order."""
-        original_cost = self.product.get_price() * self.quantity
+        original_cost = sum(product.get_price() * quantity for product, quantity in zip(self.products, self.quantities))
         discount = 0.0  # Initialize discount for non-VIP customers
         final_cost = original_cost
         reward_points = 0
@@ -168,6 +168,16 @@ class Order:
             reward_points = self.customer.get_reward(original_cost)
 
         return original_cost, discount, final_cost, reward_points
+    
+    def apply_reward_points(self, final_cost):
+        """Applies reward points to reduce the final cost if the customer has more than 100 points."""
+        if self.customer.reward >= 100:
+            reward_deduction = (self.customer.reward // 100) * 10
+            final_cost -= reward_deduction
+            self.customer.reward %= 100
+            if final_cost < 0:
+                final_cost = 0
+        return final_cost
 
 # Records class
 class Records:
@@ -281,12 +291,12 @@ class Operations:
         """Validates that the product exists."""
         product = self.records.find_product(product_name)
         if not product:
-            raise InvalidProductError("The product is not valid. Please enter a valid product name or ID.")
+            raise InvalidProductError(f"The product {product_name} is not valid. Please enter a valid product name or ID.")
         return product
     
     def validate_quantity(self, quantity):
         """Validates that the quantity is a positive integer."""
-        if quantity.isalpha() or int(quantity) <= 0:
+        if quantity.isalpha() or quantity == '' or int(quantity) <= 0:
             raise InvalidQuantityError("The quantity is not valid. Please enter a valid quantity.")
         else:
             return int(quantity)
@@ -309,71 +319,85 @@ class Operations:
                 
         while True:
             try:
-                product_name = input("Enter the product name or ID:\n")
-                product_details = self.validate_product(product_name)
+                product_names = input("Enter the product names or IDs (comma-separated):\n").split(",")
+                product_names = [name.strip() for name in product_names]
+                products = [self.validate_product(name) for name in product_names]
                 break
             except InvalidProductError as e:
                 print(e)
         
         while True:
             try:
-                quantity = input("Enter the quantity [enter a positive integer only, e.g. 1, 2, 3, 4]:\n")
-                quantity = self.validate_quantity(quantity)
+                quantities = input("Enter the quantities (comma-separated):\n").split(',')
+                quantities = [self.validate_quantity(qty.strip()) for qty in quantities]
+                if len(products) != len(quantities):
+                    raise InvalidQuantityError("The number of products and quantities must match.")
                 break
             except InvalidQuantityError as e:
                 print(e)
 
-
-        if product_details.requires_prescription() == 'y':
-            while True:
-                try:
-                    prescription_answer = input("This product requires a doctor'prescription, do you have one?\n").lower()
-                    self.validate_prescription(prescription_answer)
-                    if prescription_answer == "n":
-                        print("Sorry. This product cannot be purchased without a doctor's prescription.")
-                        return
+        for product in products:
+            if product.requires_prescription() == 'y':
+                while True:
+                    try:
+                        prescription_answer = input(f"The product {product.get_name()} require a doctor's prescription, do you have one? (y/n)\n").lower()
+                        self.validate_prescription(prescription_answer)
+                        if prescription_answer == "n":
+                            print(f"Sorry. The product {product.get_name()} cannot be purchased without a doctor's prescription.")
+                            products = [prod for prod in products if not prod.get_id() == product.get_id()]
+                            quantities = [qty for prod, qty in zip(products, quantities) if not prod.get_id() == product.get_id()]
+                            break
+                        break
+                    except InvalidPrescriptionError as e:
+                        print(e)
+                if prescription_answer == 'y':
                     break
-                except InvalidPrescriptionError as e:
-                    print(e)
 
-        if not customer:
-            # Create a new basic customer if not found
-            customer = BasicCustomer(f"B{self.records.highest_id_number() + 1}", customer_name)
-            self.records.customers.append(customer)
-        else:
-            if isinstance(customer, VIPCustomer):
-                print(f"\nWelcome Our VIP Customer {customer.get_name()}")
+        if products:
+            if not customer:
+                # Create a new basic customer if not found
+                customer = BasicCustomer(f"B{self.records.highest_id_number() + 1}", customer_name)
+                self.records.customers.append(customer)
             else:
-                print(f"\nWelcome Our Basic Customer {customer.get_name()}")
+                if isinstance(customer, VIPCustomer):
+                    print(f"\nWelcome Our VIP Customer {customer.get_name()}")
+                else:
+                    print(f"\nWelcome Our Basic Customer {customer.get_name()}")
 
-        # Create an order object
-        order = Order(customer, product_details, quantity)
+            # Create an order object
+            order = Order(customer, products, quantities)
 
-        # Calculate order details
-        original_cost, discount, final_cost, reward_points = order.compute_cost()
+            # Calculate order details
+            original_cost, discount, final_cost, reward_points = order.compute_cost()
 
-        # Print receipt
-        print("\n"+"-" * 40)
-        print("Receipt".center(40))
-        print("-" * 40)
+            # Apply reward points deduction if applicable
+            final_cost = order.apply_reward_points(final_cost)
 
-        print(f"Name:\t {customer.get_name()}".expandtabs(20))
-        print(f"Product:\t {product_details.get_name()}".expandtabs(20))
-        print(f"Unit Price:\t {original_cost/quantity:.2f} (AUD)".expandtabs(20))
-        print(f"Quantity:\t {quantity}".expandtabs(20))
-        print("-" * 40)
+            # Print receipt
+            print("\n"+"-" * 40)
+            print("Receipt".center(40))
+            print("-" * 40)
 
-        # Print original cost and discount if customer is VIP 
-        if isinstance(customer, VIPCustomer):
-            print(f"Original cost:\t {original_cost:.2f} (AUD)".expandtabs(20))
-            print(f"Discount:\t {discount:.2f} (AUD)".expandtabs(20))
-        
-        
-        print(f"Total cost:\t {final_cost:.2f} (AUD)".expandtabs(20))
-        print(f"Earned reward:\t {reward_points}".expandtabs(20))
+            print(f"Name:\t {customer.get_name()}".expandtabs(20))
 
-        # Update customer reward points
-        customer.update_reward(reward_points)
+            for product, quantity in zip(products, quantities):
+                print(f"Product:\t {product.get_name()}".expandtabs(20))
+                print(f"Unit Price:\t {product.get_price():.2f} (AUD)".expandtabs(20))
+                print(f"Quantity:\t {quantity}".expandtabs(20))
+
+            print("-" * 40)
+
+            # Print original cost and discount if customer is VIP 
+            if isinstance(customer, VIPCustomer):
+                print(f"Original cost:\t {original_cost:.2f} (AUD)".expandtabs(20))
+                print(f"Discount:\t {discount:.2f} (AUD)".expandtabs(20))
+
+
+            print(f"Total cost:\t {final_cost:.2f} (AUD)".expandtabs(20))
+            print(f"Earned reward:\t {reward_points}".expandtabs(20))
+
+            # Update customer reward points
+            customer.update_reward(reward_points)
 
     def display_customers(self):
         """Prints a formatted list of all customers with their details."""
