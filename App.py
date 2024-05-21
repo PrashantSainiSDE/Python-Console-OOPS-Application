@@ -291,19 +291,6 @@ class Operations:
         self.records.read_customers("CREDIT_DI/customers.txt")
         self.records.read_products("CREDIT_DI/products.txt")
 
-    def display_menu(self):
-        """Displays the program menu with available options."""
-        print("\n"+"#" * 60)
-        print("You can choose from the following options:")
-        print("1: Make a purchase")
-        print("2: Display existing customers")
-        print("3: Display existing products")
-        print("4: Add/update information of a product")
-        print("5: Adjust the reward rate of all Basic customers")
-        print("6: Adjust the discount rate of a VIP customer")
-        print("0: Exit the program")   
-        print("#" * 60)
-
     def validate_customer(self, customer):
         """Validates that the customer name contains only alphabetic characters or ID exists."""
         customer_details = self.records.find_customer(customer)
@@ -322,17 +309,23 @@ class Operations:
     
     def validate_quantity(self, quantity):
         """Validates that the quantity is a positive integer."""
-        if quantity.isalpha() or quantity == '' or int(quantity) <= 0:
-            raise InvalidQuantityError("The quantity is not valid. Please enter a valid quantity.")
-        else:
-            return int(quantity)
+        try:
+            quantity = int(quantity)
+            if quantity <= 0:
+                raise InvalidQuantityError("The quantity is not valid. Please enter a valid positive integer quantity.")
+        except ValueError:
+            raise InvalidQuantityError("The quantity is not valid. Please enter a valid positive integer quantity.")
+        return quantity
 
     def validate_price(self, price):
         """Validates that the price is a positive number."""
-        if price.isalpha() or float(price) <= 0:
-            raise InvalidPriceError("The Price must be a positive number.")
-        else:
-            return float(price)
+        try:
+            price = float(price)
+            if price <= 0:
+                raise InvalidPriceError("The price must be a positive number.")
+        except ValueError:
+            raise InvalidPriceError("The price is not valid. Please enter a valid positive number.")
+        return price
 
     def validate_prescription(self, prescription):
         """Validates that the prescription input is either 'y' or 'n'."""
@@ -341,10 +334,13 @@ class Operations:
     
     def validate_positive_number(self, value):
         """Validates that the input is a positive number."""
-        if value.isalpha() or float(value) <= 0:
-            raise InvalidRateError("The reward rate must be a positive number greater than 0.")
-        else:
-            return float(value)
+        try:
+            value = float(value)
+            if value <= 0:
+                raise ValueError("The value must be a positive number greater than 0.")
+        except ValueError:
+            raise InvalidRateError("The reward rate must be a valid positive number greater than 0.")
+        return value
 
     def make_purchase(self):
         """Guides the user through the purchase process and prints a receipt."""
@@ -470,7 +466,7 @@ class Operations:
         """Adjusts the reward rate for all Basic customers."""
         while True:
             try:
-                new_rate = input("\nEnter the new reward rate for all Basic customers:\n")
+                new_rate = input("Enter the new reward rate for all Basic customers:\n")
                 new_rate = self.validate_positive_number(new_rate)
                 BasicCustomer.set_reward_rate(new_rate)
                 print(f"\nReward rate for all Basic customers has been updated to {new_rate * 100:.0f}%.")
@@ -481,7 +477,7 @@ class Operations:
     def adjust_vip_customer_discount_rate(self):
         """Adjusts the discount rate for a VIP customer."""
         while True:
-                customer_identifier = input("\nEnter the name or ID of the VIP customer:\n")
+                customer_identifier = input("Enter the name or ID of the VIP customer:\n")
                 vip_customer = self.records.find_customer(customer_identifier)
                 if not isinstance(vip_customer, VIPCustomer):
                     print("Invalid customer. Please enter a valid VIP customer name or ID.")
@@ -496,6 +492,19 @@ class Operations:
             except InvalidRateError as e:
                 print(e)
         vip_customer.set_discount_rate(new_rate)
+
+    def display_menu(self):
+        """Displays the program menu with available options."""
+        print("\n"+"#" * 60)
+        print("You can choose from the following options:")
+        print("1: Make a purchase")
+        print("2: Display existing customers")
+        print("3: Display existing products")
+        print("4: Add/update information of a product")
+        print("5: Adjust the reward rate of all Basic customers")
+        print("6: Adjust the discount rate of a VIP customer")
+        print("0: Exit the program")   
+        print("#" * 60)
 
     def run(self):
         """The main loop of the program, handling user input and menu options."""
